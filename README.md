@@ -455,3 +455,166 @@ module.exports = {
     }
   }
   ```
+
+### [Write mutation resolvers](https://www.apollographql.com/docs/tutorial/mutation-resolvers/)
+
+- Note: The authentication method used in this tutorial is not secure and should not be used in production systems.
+- Add a `login` mutation to `src/resolvers.js`:
+
+  ```js
+  const { paginateResults } = require("./utils");
+
+  module.exports = {
+    // ...
+    Mutation: {
+      login: async (_, { email }, { dataSources }) => {
+        // Return a login token based on a user's email address.
+        const user = await dataSources.userAPI.findOrCreateUser({ email });
+        if (user) return Buffer.from(email).toString("base64");
+      },
+    },
+    // ...
+  };
+  ```
+
+- In `src/index.js`, perform authentication based on the Mutation.login token.
+
+  - The `context` function is called once for each GraphQL operation received from clients.
+    - The return value becomes the `context` argument passed to each resolver that runs for the operation.
+    - Since the `context` is created at the beginning of each operation's execution, all resolvers can access details for that logged-in user and perform actions accordingly.
+
+  ```js
+  const isEmail = require("isemail");
+  // ...
+  const server = new ApolloServer({
+    /*
+      1. Get the `Authorization` header value (if any).
+      2. Decode the `Authorization` header value.
+      3. If the value is an email address, retrieve the user. Return the `user` in an object.
+    */
+    context: async ({ req }) => {
+      // Perform simple auth check on each request.
+      const auth = (req.headers && req.headers.authorization) || "";
+      const email = Buffer.from(auth, "base64").toString("ascii");
+      if (!isEmail.validate(email)) return { user: null };
+      // Find user by email.
+      const users = await store.users.findOrCreate({ where: { email } });
+      const user = (users && users[0]) || null;
+      if (user === null) {
+        return { user: null };
+      }
+      return { user: { ...user.dataValues } };
+    },
+    // ...
+  });
+  // ...
+  ```
+
+- In `src/resolvers.js`, add `bookTrips` and `cancelTrip` mutations:
+
+  ```js
+  // ...
+  module.exports = {
+    // ...
+    Mutation: {
+      // ...
+      bookTrips: async (_, { launchIds }, { dataSources }) => {
+        const results = await dataSources.userAPI.bookTrips({ launchIds });
+        const launches = await dataSources.launchAPI.getLaunchesByIds({
+          launchIds,
+        });
+        return {
+          success: results && results.length === launchIds.length,
+          message:
+            results.length === launchIds.length
+              ? "trips booked successfully"
+              : `the following launches couldn't be booked: ${launchIds.filter(
+                  (id) => !results.includes(id)
+                )}`,
+          launches,
+        };
+      },
+      cancelTrip: async (_, { launchId }, { dataSources }) => {
+        const result = await dataSources.userAPI.cancelTrip({ launchId });
+        if (!result)
+          return {
+            success: false,
+            message: "failed to cancel trip",
+          };
+        const launch = await dataSources.launchAPI.getLaunchById({ launchId });
+        return {
+          success: true,
+          message: "trip cancelled",
+          launches: [launch],
+        };
+      },
+    },
+    // ...
+  };
+  ```
+
+- Test out a mutation.
+
+  - Obtain a login token:
+
+    ```graphql
+    mutation LoginUser {
+      login(email: "daisy@apollographql.com")
+    }
+    ```
+
+    - Example response (base64 encoding of supplied email address):
+
+      ```json
+      {
+        "data": {
+          "login": "ZGFpc3lAYXBvbGxvZ3JhcGhxbC5jb20="
+        }
+      }
+      ```
+
+  - Book trips:
+
+    - Supply HTTP header:
+
+      ```json
+      {
+        "authorization": "ZGFpc3lAYXBvbGxvZ3JhcGhxbC5jb20="
+      }
+      ```
+
+    ```graphql
+    mutation BookTrips {
+      bookTrips(launchIds: [67, 68, 69]) {
+        success
+        message
+        launches {
+          id
+        }
+      }
+    }
+    ```
+
+    - Example response:
+
+    ```json
+    {
+      "data": {
+        "bookTrips": {
+          "success": true,
+          "message": "trips booked successfully",
+          "launches": [
+            {
+              "id": "67"
+            },
+            {
+              "id": "68"
+            },
+            {
+              "id": "69"
+            }
+          ]
+        }
+      }
+    }
+    ```
