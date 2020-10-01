@@ -618,3 +618,16 @@ module.exports = {
       }
     }
     ```
+
+### [5. Connect your graph to Apollo Studio](https://www.apollographql.com/docs/tutorial/production/)
+
+- Create an account (free) at [https://studio.apollographql.com/](https://studio.apollographql.com/).
+- Create a graph:
+  - Click `New Graph`.
+  - Provide a name and click `Next`.
+- Create a `.env` file (USED BY `dotenv`) and supply the API key:
+
+  ```properties
+  APOLLO_KEY=PAST_KEY_HERE
+  APOLLO_SCHEMA_REPORTING=true
+  ```
