@@ -767,6 +767,8 @@ module.exports = {
 
 ### [Fetch data with queries](https://www.apollographql.com/docs/tutorial/queries/)
 
+#### Fetching a list
+
 - In `src/pages/launches.tsx`, import `useQuery` and `gql` from `@apollo/client` and define `GET_LAUNCHES`.
 
   ```tsx
@@ -785,7 +787,7 @@ module.exports = {
         hasMore
         launches {
           id
-          isBooked
+          # isBooked
           rocket {
             id
             name
@@ -805,7 +807,7 @@ module.exports = {
     fragment LaunchTile on Launch {
       __typename
       id
-      isBooked
+      # isBooked
       rocket {
         id
         name
@@ -841,3 +843,352 @@ module.exports = {
 
   export default Launches;
   ```
+
+#### Build a paginated list
+
+- If more launches are available in the query, render a `Load More` button. When clicked, call the `fetchMore` function from Apollo.
+
+  ```tsx
+  import React, { Fragment } from "react";
+  import { gql, useQuery } from "@apollo/client";
+
+  import { LaunchTile, Header, Button, Loading } from "../components";
+  import { RouteComponentProps } from "@reach/router";
+  import * as GetLaunchListTypes from "./__generated__/GetLaunchList";
+
+  // Define a query.
+  const GET_LAUNCHES = gql`
+    query launchList($after: String) {
+      launches(after: $after) {
+        cursor
+        hasMore
+        launches {
+          id
+          # isBooked
+          rocket {
+            id
+            name
+          }
+          mission {
+            name
+            missionPatch
+          }
+        }
+      }
+    }
+  `;
+
+  interface LaunchesProps extends RouteComponentProps {}
+
+  // Pass the query to Apollo's useQuery hook and render the list.
+  const Launches: React.FC<LaunchesProps> = () => {
+    const { data, loading, error, fetchMore } = useQuery<
+      GetLaunchListTypes.GetLaunchList,
+      GetLaunchListTypes.GetLaunchListVariables
+    >(GET_LAUNCHES);
+
+    if (loading) return <Loading />;
+    if (error) return <p>ERROR</p>;
+    if (!data) return <p>Not Found</p>;
+    return (
+      <Fragment>
+        <Header />
+        {data?.launches?.launches?.map((launch: any) => (
+          <LaunchTile key={launch.id} launch={launch} />
+        ))}
+        {data?.launches?.hasMore && (
+          <Button
+            onClick={() =>
+              fetchMore({
+                variables: { after: data?.launches?.cursor },
+                // Tell Apollo how to update the list of launches in the cache:
+                // Merge the previous result and the new query result.
+                updateQuery: (prev, { fetchMoreResult, ...rest }) => {
+                  if (!fetchMoreResult) return prev;
+                  return {
+                    ...fetchMoreResult,
+                    launches: {
+                      ...fetchMoreResult?.launches,
+                      launches: [
+                        ...prev?.launches?.launches,
+                        ...fetchMoreResult?.launches?.launches,
+                      ],
+                    },
+                  };
+                },
+              })
+            }
+          >
+            Load More
+          </Button>
+        )}
+      </Fragment>
+    );
+  };
+
+  export default Launches;
+  ```
+
+#### Fetching a single launch
+
+- In `src/pages/launch.tsx`, provide `launchId` (via prop from the router) to the query via `variables`.
+
+  ```tsx
+  import React, { Fragment } from "react";
+  import { gql, useQuery } from "@apollo/client";
+
+  import { Loading, Header, LaunchDetail } from "../components";
+  import { ActionButton } from "../containers";
+  import { RouteComponentProps } from "@reach/router";
+  import * as LaunchDetailTypes from "./__generated__/LaunchDetails";
+
+  export const GET_LAUNCH_DETAILS = gql`
+    query LaunchDetails($launchId: ID!) {
+      launch(id: $launchId) {
+        id
+        site
+        # isBooked
+        rocket {
+          id
+          name
+          type
+        }
+        mission {
+          name
+          missionPatch
+        }
+      }
+    }
+  `;
+
+  interface LaunchProps extends RouteComponentProps {
+    launchId?: any;
+  }
+
+  const Launch: React.FC<LaunchProps> = ({ launchId }) => {
+    const { data, loading, error } = useQuery<
+      LaunchDetailTypes.LaunchDetails,
+      LaunchDetailTypes.LaunchDetailsVariables
+    >(GET_LAUNCH_DETAILS, { variables: { launchId } });
+
+    if (loading) return <Loading />;
+    if (error) return <p>ERROR: {error?.message}</p>;
+    if (!data) return <p>Not found</p>;
+
+    return (
+      <Fragment>
+        <Header image={data?.launch?.mission?.missionPatch}>
+          {data?.launch?.mission?.name}
+        </Header>
+        <LaunchDetail {...data?.launch} />
+        <ActionButton {...data?.launch} />
+      </Fragment>
+    );
+  };
+
+  export default Launch;
+  ```
+
+#### Using fragments to share code
+
+- Define and incorporate a `LAUNCH_TILE_DATA` fragment.
+
+  - `src/pages/launches.tsx`:
+
+    ```tsx
+    import React, { Fragment } from "react";
+    import { gql, useQuery } from "@apollo/client";
+
+    import { LaunchTile, Header, Button, Loading } from "../components";
+    import { RouteComponentProps } from "@reach/router";
+    import * as GetLaunchListTypes from "./__generated__/GetLaunchList";
+
+    export const LAUNCH_TILE_DATA = gql`
+      fragment LaunchTile on Launch {
+        id
+        # isBooked
+        rocket {
+          id
+          name
+        }
+        mission {
+          name
+          missionPatch
+        }
+      }
+    `;
+
+    // Define a query.
+    const GET_LAUNCHES = gql`
+      query launchList($after: String) {
+        launches(after: $after) {
+          cursor
+          hasMore
+          launches {
+            ...LaunchTile
+          }
+        }
+      }
+      ${LAUNCH_TILE_DATA}
+    `;
+
+    interface LaunchesProps extends RouteComponentProps {}
+
+    // Pass the query to Apollo's useQuery hook and render the list.
+    const Launches: React.FC<LaunchesProps> = () => {
+      const { data, loading, error, fetchMore } = useQuery<
+        GetLaunchListTypes.GetLaunchList,
+        GetLaunchListTypes.GetLaunchListVariables
+      >(GET_LAUNCHES);
+
+      if (loading) return <Loading />;
+      if (error) return <p>ERROR</p>;
+      if (!data) return <p>Not Found</p>;
+      return (
+        <Fragment>
+          <Header />
+          {data>.launches?.launches?.map((launch: any) => (
+            <LaunchTile key={launch.id} launch={launch} />
+          ))}
+          {data?.launches?.hasMore && (
+            <Button
+              onClick={() =>
+                fetchMore({
+                  variables: { after: data.launches?.cursor },
+                  // Tell Apollo how to update the list of launches in the cache:
+                  // Merge the previous result and the new query result.
+                  updateQuery: (prev, { fetchMoreResult, ...rest }) => {
+                    if (!fetchMoreResult) return prev;
+                    return {
+                      ...fetchMoreResult,
+                      launches: {
+                        ...fetchMoreResult?.launches,
+                        launches: [
+                          ...prev?.launches?.launches,
+                          ...fetchMoreResult?.launches?.launches,
+                        ],
+                      },
+                    };
+                  },
+                })
+              }
+            >
+              Load More
+            </Button>
+          )}
+        </Fragment>
+      );
+    };
+
+    export default Launches;
+    ```
+
+  - `src/pages/launch.tsx`:
+
+    ```tsx
+    import React, { Fragment } from "react";
+    import { gql, useQuery } from "@apollo/client";
+
+    import { Loading, Header, LaunchDetail } from "../components";
+    import { ActionButton } from "../containers";
+    import { RouteComponentProps } from "@reach/router";
+    import * as LaunchDetailTypes from "./__generated__/LaunchDetails";
+    import { LAUNCH_TILE_DATA } from "./launches";
+
+    export const GET_LAUNCH_DETAILS = gql`
+      query LaunchDetails($launchId: ID!) {
+        launch(id: $launchId) {
+          ...LaunchTile
+        }
+      }
+      ${LAUNCH_TILE_DATA}
+    `;
+
+    interface LaunchProps extends RouteComponentProps {
+      launchId?: any;
+    }
+
+    const Launch: React.FC<LaunchProps> = ({ launchId }) => {
+      const { data, loading, error } = useQuery<
+        LaunchDetailTypes.LaunchDetails,
+        LaunchDetailTypes.LaunchDetailsVariables
+      >(GET_LAUNCH_DETAILS, { variables: { launchId } });
+
+      if (loading) return <Loading />;
+      if (error) return <p>ERROR: {error?.message}</p>;
+      if (!data) return <p>Not found</p>;
+
+      return (
+        <Fragment>
+          <Header image={data?.launch?.mission?.missionPatch}>
+            {data?.launch?.mission?.name}
+          </Header>
+          <LaunchDetail {...data?.launch} />
+          <ActionButton {...data?.launch} />
+        </Fragment>
+      );
+    };
+
+    export default Launch;
+    ```
+
+#### Customizing the fetch policy
+
+- We can customize the `useQuery`'s `fetchPolicy`, such as to bypass the cache for data that shouldn't be stale.
+
+  - Default policy: `cache-first`.
+    - Check the cache to see if it's there before making a network request.
+  - To always retrieve new data: `network-only`.
+
+    ```tsx
+    import React, { Fragment } from "react";
+    import { gql, useQuery } from "@apollo/client";
+
+    import { Loading, Header, LaunchTile } from "../components";
+    import { LAUNCH_TILE_DATA } from "./launches";
+    import { RouteComponentProps } from "@reach/router";
+    import * as GetMyTripsTypes from "./__generated__/GetMyTrips";
+
+    export const GET_MY_TRIPS = gql`
+      query GetMyTrips {
+        me {
+          id
+          email
+          trips {
+            ...LaunchTile
+          }
+        }
+      }
+      ${LAUNCH_TILE_DATA}
+    `;
+
+    interface ProfileProps extends RouteComponentProps {}
+
+    const Profile: React.FC<ProfileProps> = () => {
+      const { data, loading, error } = useQuery<
+        GetMyTripsTypes.GetMyTrips,
+        any
+      >(GET_MY_TRIPS, { fetchPolicy: "network-only" });
+
+      if (loading) return <Loading />;
+      if (error) return <p>ERROR: {error?.message}</p>;
+      if (!data) return <p>Not Found</p>;
+
+      return (
+        <Fragment>
+          <Header>My Trips</Header>
+          {data?.me?.trips?.length ? (
+            data?.me?.trips?.map((launch: any) => (
+              <LaunchTile key={launch.id} launch={launch} />
+            ))
+          ) : (
+            <p>You haven't booked any trips</p>
+          )}
+        </Fragment>
+      );
+    };
+
+    export default Profile;
+    ```
+
+- Until we implement the login feature, however, no trips will load at http://localhost:3000/profile.

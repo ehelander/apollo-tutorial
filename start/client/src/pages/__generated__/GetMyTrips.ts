@@ -21,7 +21,6 @@ export interface GetMyTrips_me_trips_mission {
 export interface GetMyTrips_me_trips {
   __typename: "Launch";
   id: string;
-  isBooked: boolean;
   rocket: GetMyTrips_me_trips_rocket | null;
   mission: GetMyTrips_me_trips_mission | null;
 }
