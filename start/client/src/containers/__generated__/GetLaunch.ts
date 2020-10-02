@@ -21,7 +21,6 @@ export interface GetLaunch_launch_mission {
 export interface GetLaunch_launch {
   __typename: "Launch";
   id: string;
-  isBooked: boolean;
   rocket: GetLaunch_launch_rocket | null;
   mission: GetLaunch_launch_mission | null;
 }
