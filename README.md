@@ -641,4 +641,5 @@ module.exports = {
 ```sh
 cd start/client
 npm install
+npm audit fix
 ```
