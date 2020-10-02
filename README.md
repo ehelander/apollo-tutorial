@@ -631,3 +631,14 @@ module.exports = {
   APOLLO_KEY=PAST_KEY_HERE
   APOLLO_SCHEMA_REPORTING=true
   ```
+
+- Explore.
+
+### [6. Client](https://www.apollographql.com/docs/tutorial/client/)
+
+- Install dependencies:
+
+```sh
+cd start/client
+npm install
+```
