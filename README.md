@@ -634,12 +634,133 @@ module.exports = {
 
 - Explore.
 
-### [6. Client](https://www.apollographql.com/docs/tutorial/client/)
+### [6. Set up Apollo Client](https://www.apollographql.com/docs/tutorial/client/)
 
 - Install dependencies:
 
-```sh
-cd start/client
-npm install
-npm audit fix
-```
+  ```sh
+  cd start/client
+  npm install
+  npm audit fix
+  ```
+
+- Recommendation: Apollo VS Code extension
+
+  ```sh
+  code --install-extension apollographql.vscode-apollo
+  ```
+
+  - The VS Code extension uses an API key to connect to Apollo Studio. Create an `.env` file in `start/client/`:
+
+    ```properties
+    ENGINE_API_KEY=PASTE_YOUR_KEY_HERE
+    ```
+
+    - Note that the docs are misleading. The property should be `ENGINE_API_KEY`, not `APOLLO_KEY`.
+
+- In `apollo.config.js`, configure the behavior of the Apollo VS Code extension and the Apollo CLI:
+
+  ```js
+  module.exports = {
+    client: {
+      name: "Space Explorer [web]",
+      service: "GRAPH_NAME",
+    },
+  };
+  ```
+
+- To generate TypeScript types for queries & mutations:
+
+  ```sh
+  npm run codegen
+  ```
+
+- In `src/index.tsx`, create an instance of `ApolloClient`. With these lines, our client is ready to fetch data.
+
+  ```tsx
+  import {
+    ApolloClient,
+    InMemoryCache,
+    gql,
+    NormalizedCacheObject,
+  } from "@apollo/client";
+
+  const client: ApolloClient<NormalizedCacheObject> = new ApolloClient({
+    // URI of our GraphQL server.
+    uri: "http://localhost:4000/",
+    // Instance of InMemoryCache to use as the client's cache.
+    cache: new InMemoryCache(),
+  });
+  ```
+
+- To test it out, add the following to `src/index.tsx`:
+
+  ```tsx
+  client
+    .query({
+      query: gql`
+        query TestQuery {
+          launch(id: 56) {
+            id
+            mission {
+              name
+            }
+          }
+        }
+      `,
+    })
+    .then((result) => console.log(result));
+  ```
+
+  - Start the client:
+
+    ```sh
+    npm start
+    ```
+
+    - The response should be logged in the browser console at http://localhost:3000/.
+
+    ```json
+    {
+      "data": {
+        "launch": {
+          "id": "56",
+          "mission": { "name": "Paz / Starlink Demo", "__typename": "Mission" },
+          "__typename": "Launch"
+        }
+      }
+    }
+    ```
+
+  - Remove the block.
+
+- Connect Apollo Client to React. Update `src/index.tsx` to the following:
+
+  ```tsx
+  import {
+    ApolloClient,
+    ApolloProvider,
+    InMemoryCache,
+    NormalizedCacheObject,
+  } from "@apollo/client";
+  import React from "react";
+  import ReactDOM from "react-dom";
+  import Pages from "./pages";
+  import injectStyles from "./styles";
+
+  const client: ApolloClient<NormalizedCacheObject> = new ApolloClient({
+    // URI of our GraphQL server.
+    uri: "http://localhost:4000/",
+    // Instance of InMemoryCache to use as the client's cache.
+    cache: new InMemoryCache(),
+  });
+
+  injectStyles();
+  ReactDOM.render(
+    // Inject our client into the ApolloProvider.
+    <ApolloProvider client={client}>
+      <Pages />
+    </ApolloProvider>,
+    document.getElementById("root")
+  );
+  ```
